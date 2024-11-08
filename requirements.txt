@@ -13,3 +13,6 @@ SpeechRecognition
 langchain_huggingface
 google-cloud-speech
 langchain-openai
+langgraph
+IPython
+uuid
