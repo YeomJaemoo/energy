@@ -47,6 +47,8 @@ def main():
         st.session_state.chat_history = []
     if "thread_id" not in st.session_state:
         st.session_state.thread_id = str(uuid.uuid4())  # 고유 스레드 ID 생성
+    if "voice_input" not in st.session_state:  # voice_input 속성 초기화
+        st.session_state.voice_input = ""  # 빈 문자열로 초기화
 
     # 사이드바 구성
     with st.sidebar:
