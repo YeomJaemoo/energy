@@ -2,14 +2,14 @@
 import streamlit as st  # Streamlit을 사용하여 웹 애플리케이션 생성
 from pathlib import Path  # 파일 경로 작업을 위한 Path 클래스
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredPowerPointLoader  # 다양한 파일 형식에서 텍스트 추출하는 로더들
-from langchain.text_splitter import RecursiveCharacterTextSplitter  # 텍스트를 작은 청크로 나누기 위한 모듈
-from langchain_community.embeddings import HuggingFaceEmbeddings  # HuggingFace 모델을 통한 텍스트 임베딩 처리
+from langchain.text_splitter import RecursiveCharacterTextSplitter  # 텍스트를 작은 청크로 나누기 위한 모듈  
+from langchain_huggingface import HuggingFaceEmbeddings # HuggingFace 모델을 통한 텍스트 임베딩 처리
 from langchain_community.vectorstores import FAISS  # FAISS 벡터 스토어를 통해 텍스트 검색 기능 구현
 from langchain_community.callbacks import get_openai_callback  # OpenAI 응답을 받아오는 콜백
 from langchain.memory import ConversationBufferMemory  # 대화 내용을 저장하는 메모리
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory  # Streamlit에서 채팅 기록 관리
 from langchain.chains import ConversationalRetrievalChain  # 문서 검색과 회신을 결합한 대화 체인
-from langchain_community.chat_models import ChatOpenAI # OpenAI 언어 모델 사용을 위한 모듈
+from langchain_openai import ChatOpenAI #OpenAI 언어 모델 사용을 위한 모듈
 from langchain.schema.messages import HumanMessage, AIMessage  # 사용자와 AI 메시지를 나타내는 스키마
 import tiktoken  # 토큰화 처리를 위한 모듈
 import json  # JSON 형식의 데이터 관리
