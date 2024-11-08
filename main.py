@@ -3,13 +3,13 @@ import streamlit as st  # Streamlit을 사용하여 웹 애플리케이션 생�
 from pathlib import Path  # 파일 경로 작업을 위한 Path 클래스
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredPowerPointLoader  # 다양한 파일 형식에서 텍스트 추출하는 로더들
 from langchain.text_splitter import RecursiveCharacterTextSplitter  # 텍스트를 작은 청크로 나누기 위한 모듈
-from langchain_huggingface import HuggingFaceEmbeddings  # HuggingFace 모델을 통한 텍스트 임베딩 처리
-from langchain.vectorstores import FAISS  # FAISS 벡터 스토어를 통해 텍스트 검색 기능 구현
+from langchain_community.embeddings import HuggingFaceEmbeddings  # HuggingFace 모델을 통한 텍스트 임베딩 처리
+from langchain_community.vectorstores import FAISS  # FAISS 벡터 스토어를 통해 텍스트 검색 기능 구현
 from langchain_community.callbacks import get_openai_callback  # OpenAI 응답을 받아오는 콜백
 from langchain.memory import ConversationBufferMemory  # 대화 내용을 저장하는 메모리
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory  # Streamlit에서 채팅 기록 관리
 from langchain.chains import ConversationalRetrievalChain  # 문서 검색과 회신을 결합한 대화 체인
-from langchain.chat_models import ChatOpenAI  # OpenAI 언어 모델 사용을 위한 모듈
+from langchain_community.chat_models import ChatOpenAI # OpenAI 언어 모델 사용을 위한 모듈
 from langchain.schema.messages import HumanMessage, AIMessage  # 사용자와 AI 메시지를 나타내는 스키마
 import tiktoken  # 토큰화 처리를 위한 모듈
 import json  # JSON 형식의 데이터 관리
@@ -20,13 +20,12 @@ import tempfile  # 임시 파일 생성 및 관리 모듈
 # 애플리케이션 실행 함수 정의
 def main():
     # 페이지 설정 (Streamlit 상단 바 구성)
-    st.set_page_config(page_title="에너지", page_icon="🌻")  # 웹 페이지 제목과 아이콘 설정
+    st.set_page_config(page_title="에너지", page_icon="🌻", layout="centered")  # 레이아웃을 설정하여 폰트 경고를 방지
     st.image('energy.png')  # 상단에 이미지를 표시
     st.title("_:red[에너지 학습 도우미]_ 🏫")  # 제목 표시 (에너지 학습 도우미)
     st.header("😶주의! 이 챗봇은 참고용으로 사용하세요!", divider='rainbow')  # 주의사항 표시
 
     # 세션 상태 초기화
-    # Streamlit 세션에서 대화 상태, 대화 기록, 처리 완료 여부 등을 초기화하여 유지
     if "conversation" not in st.session_state:  # 대화 체인 상태
         st.session_state.conversation = None
     if "chat_history" not in st.session_state:  # 대화 기록 상태
