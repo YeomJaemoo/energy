@@ -56,7 +56,7 @@ def main():
             st.session_state.processComplete = True  # 처리 완료 상태로 설정
 
         # 음성 입력을 받아 녹음하고 텍스트로 변환
-        audio_value = st.experimental_audio_input("음성 메시지를 녹음하여 질문하세요😁.")
+        audio_value = st.audio_input("음성 메시지를 녹음하여 질문하세요😁.")
         
         # 음성 입력이 있을 경우, 녹음된 내용을 텍스트로 변환
         if audio_value:
