@@ -90,7 +90,7 @@ def main():
             # 대화 기록과 초기 메시지를 초기화
             st.session_state.chat_history = []
             st.session_state.messages = [{"role": "assistant", "content": "😊"}]
-            st.experimental_set_query_params()  # 화면을 다시 로드하여 대화 내용을 초기화
+            st.query_params()  # 화면을 다시 로드하여 대화 내용을 초기화
 
     # 질문 입력 필드 (음성 입력 또는 텍스트 입력을 통한 질문)
     query = st.session_state.voice_input or st.chat_input("질문을 입력해주세요.")
