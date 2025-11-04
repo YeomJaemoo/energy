@@ -1,4 +1,5 @@
 # 라이브러리 및 모듈 가져오기
+import os
 import streamlit as st
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredPowerPointLoader
@@ -36,6 +37,9 @@ def main():
         st.session_state.voice_input = ""
     if "messages" not in st.session_state:
         st.session_state["messages"] = [{"role": "assistant", "content": "😊"}]
+    # 🔑 오디오 위젯 초기화용 키
+    if "audio_key" not in st.session_state:
+        st.session_state.audio_key = 0
 
     # 사이드바
     with st.sidebar:
@@ -62,23 +66,44 @@ def main():
                 st.error("인덱스 준비 중 오류가 발생했습니다. 로그를 확인하세요.")
                 st.stop()
 
-        # 음성 입력
-        audio_value = st.audio_input("음성 메시지를 녹음하여 질문하세요😁.")
+        # 음성 입력 (🔑 키를 이용해 위젯 초기화 가능)
+        audio_value = st.audio_input(
+            "음성 메시지를 녹음하여 질문하세요😁.",
+            key=f"audio_{st.session_state.audio_key}"
+        )
+
+        # 수동 초기화 버튼
+        if st.button("🎤 녹음 지우기", help="현재 녹음 파일을 비웁니다."):
+            st.session_state.voice_input = ""
+            st.session_state.audio_key += 1  # 위젯 재생성 → 비워짐
+            st.rerun()
+
+        # 음성 입력 처리
         if audio_value:
             with st.spinner("음성을 인식하는 중..."):
                 recognizer = sr.Recognizer()
+                temp_path = None
                 try:
                     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio_file:
+                        temp_path = temp_audio_file.name
                         temp_audio_file.write(audio_value.getvalue())
-                        with sr.AudioFile(temp_audio_file.name) as source:
-                            audio = recognizer.record(source)
-                            st.session_state.voice_input = recognizer.recognize_google(audio, language='ko-KR').strip()
+                    with sr.AudioFile(temp_path) as source:
+                        audio = recognizer.record(source)
+                        st.session_state.voice_input = recognizer.recognize_google(audio, language='ko-KR').strip()
+                    # 🎯 위젯과 값 초기화
+                    st.session_state.audio_key += 1  # 위젯 리셋
                 except sr.UnknownValueError:
                     st.warning("음성을 인식하지 못했거나 모델을 불러오지 않았습니다. Process를 누르고 다시 시도하세요!")
                 except sr.RequestError:
                     st.warning("서버와의 연결에 문제가 있습니다. 다시 시도하세요!")
                 except OSError:
                     st.error("오디오 파일을 처리하는 데 문제가 발생했습니다. 다시 시도하세요!")
+                finally:
+                    if temp_path and os.path.exists(temp_path):
+                        try:
+                            os.remove(temp_path)
+                        except Exception:
+                            pass  # 임시 파일 삭제 실패는 무시
 
         # 대화 저장
         if st.button("대화 저장", key="save_button"):
@@ -91,12 +116,15 @@ def main():
         if st.button("대화 내용 삭제", key="clear_button"):
             st.session_state.chat_history = []
             st.session_state.messages = [{"role": "assistant", "content": "😊"}]
+            st.session_state.voice_input = ""
+            st.session_state.audio_key += 1  # 오디오도 함께 초기화
             st.query_params
 
     # 입력
     query = st.session_state.voice_input or st.chat_input("질문을 입력해주세요.")
 
     if query:
+        # 텍스트/음성 질문 처리 후 음성 문자열도 비움
         st.session_state.voice_input = ""
         try:
             st.session_state.messages.insert(0, {"role": "user", "content": query})
