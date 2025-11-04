@@ -1,18 +1,32 @@
-pysqlite3-binary
-langchain
-langchain-text-splitters
-chromadb
-unstructured
-sentence-transformers
-faiss-cpu
-tiktoken
-pypdf
-loguru
-docx2txt
-langchain-community
-SpeechRecognition
-langchain_huggingface
-google-cloud-speech
-langchain-openai
-langgraph
+# ───── Core Framework ─────
+streamlit==1.39.0
+tiktoken>=0.7.0
+pathlib==1.0.1
 
+# ───── LangChain Ecosystem ─────
+langchain==0.2.12
+langchain-core==0.2.34
+langchain-community==0.2.8
+langchain-openai==0.1.21
+langchain-huggingface==0.0.6
+langchain-text-splitters==0.2.2
+
+# ───── Embeddings & Vector Store ─────
+faiss-cpu==1.8.0
+sentence-transformers>=2.2.2
+transformers>=4.44.0
+
+# ───── Audio / Speech ─────
+SpeechRecognition==3.10.1
+pydub>=0.25.1
+
+# ───── Document Loaders ─────
+unstructured>=0.15.0
+python-docx>=1.0.0
+pypdf>=4.3.1
+pdfminer.six>=20221105
+
+# ───── Utilities ─────
+numpy>=1.26.0
+pandas>=2.2.0
+json5>=0.9.14
