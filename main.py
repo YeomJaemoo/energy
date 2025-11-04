@@ -6,7 +6,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter# 텍스트�
 from langchain_huggingface import HuggingFaceEmbeddings # HuggingFace 모델을 통한 텍스트 임베딩 처리
 from langchain_community.vectorstores import FAISS  # FAISS 벡터 스토어를 통해 텍스트 검색 기능 구현
 from langchain_community.callbacks import get_openai_callback  # OpenAI 응답을 받아오는 콜백
-from langchain.memory import ConversationBufferMemory  # 대화 내용을 저장하는 메모리
+from langchain_community.memory import ConversationBufferMemory  # 대화 내용을 저장하는 메모리 (변경된 임포트 경로)
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory  # Streamlit에서 채팅 기록 관리
 from langchain.chains import ConversationalRetrievalChain  # 문서 검색과 회신을 결합한 대화 체인
 from langchain_openai import ChatOpenAI #OpenAI 언어 모델 사용을 위한 모듈
@@ -206,4 +206,3 @@ def save_conversation_as_txt(chat_history):
 # 애플리케이션 실행
 if __name__ == '__main__':
     main()
-
