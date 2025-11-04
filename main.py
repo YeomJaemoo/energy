@@ -11,7 +11,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
 
 import tiktoken
 import base64
@@ -40,7 +39,6 @@ def main():
     # 사이드바
     with st.sidebar:
         folder_path = Path()
-        # secrets 점검
         if "OPENAI_API_KEY" not in st.secrets:
             st.error("secrets에 OPENAI_API_KEY가 없습니다. .streamlit/secrets.toml에 설정해 주세요.")
             st.stop()
@@ -104,7 +102,6 @@ def main():
             chain = st.session_state.conversation
             with st.spinner("생각 중..."):
                 if chain:
-                    # LCEL: input과 chat_history 전달
                     result = chain.invoke({"input": query, "chat_history": st.session_state.chat_history})
                     response = result.get("answer", "")
                     source_documents = result.get("context", [])
@@ -115,7 +112,7 @@ def main():
                     response = "모델이 준비되지 않았습니다. 'Process' 버튼을 눌러 모델을 준비해주세요."
                     source_documents = []
         except Exception as e:
-            st.exception(e)  # 원인 로그 출력
+            st.exception(e)
             st.error("질문을 처리하는 중 오류가 발생했습니다. 위 로그를 확인하세요.")
             response, source_documents = "", []
 
@@ -173,9 +170,8 @@ def get_text_chunks(text_docs):
 # 벡터 스토어
 def get_vectorstore(text_chunks):
     if not text_chunks:
-        # 문서가 하나도 없을 때도 안전하게 동작하도록 빈 벡터 DB 생성
-        # (FAISS는 빈 입력을 허용하지 않아 최소 더미를 넣어 우회)
-        from langchain.schema import Document as _Doc  # 일부 버전에선 core가 아닐 수 있어 호환용
+        # 빈 인덱스 방지용 더미 문서
+        from langchain.schema import Document as _Doc
         text_chunks = [_Doc(page_content="(no documents indexed)", metadata={"source": "none"})]
     embeddings = HuggingFaceEmbeddings(
         model_name="jhgan/ko-sroberta-multitask",
@@ -203,7 +199,7 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
         standalone_q = inputs["standalone_question"]
         return retriever.get_relevant_documents(standalone_q)
 
-    # 3) 답변 프롬프트 (문맥은 문자열로!)
+    # 3) 답변 프롬프트 (문맥은 문자열로)
     answer_prompt = ChatPromptTemplate.from_messages([
         ("system",
          "Answer the user's question using ONLY the provided context. "
@@ -213,17 +209,16 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
     ])
     answer_chain = answer_prompt | llm | StrOutputParser()
 
-    # 4) 전체 체인 조립
+    # 4) 전체 체인 조립 (필드 추출은 lambda로 명시!)
     from langchain_core.runnables import RunnableMap
 
     def join_docs_as_text(docs):
-        # 프롬프트에 넣을 문자열 컨텍스트
         return "\n\n".join([getattr(d, "page_content", "") for d in docs]) if docs else "(no context)"
 
     chain = (
         RunnableMap({
-            "input": RunnablePassthrough(),
-            "chat_history": RunnablePassthrough(),
+            "input": lambda x: x["input"],
+            "chat_history": lambda x: x["chat_history"],
         })
         | RunnableMap({
             "input": lambda x: x["input"],
@@ -233,21 +228,16 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
         | RunnableMap({
             "input": lambda x: x["input"],
             "chat_history": lambda x: x["chat_history"],
-            "context_docs": retrieve_docs,                 # list[Document] (UI용 보존)
-            "context_str": lambda x: join_docs_as_text(x["context_docs"]),  # 프롬프트용 문자열
+            "context_docs": retrieve_docs,
+            "context_str": lambda x: join_docs_as_text(x["context_docs"]),
         })
         | RunnableMap({
-            "answer": answer_chain,     # string
-            "context": lambda x: x["context_docs"]
+            "answer": answer_chain,            # string
+            "context": lambda x: x["context_docs"],  # UI용 원본 문서 리스트
         })
+        | (lambda x: {"answer": x["answer"], "context": x["context"]})
     )
-    # 결과 표준화
-    def finalize(x):
-        return {
-            "answer": x["answer"],
-            "context": x["context"],  # list[Document] 그대로 반환 (UI에서 expander로 표시)
-        }
-    return chain | finalize
+    return chain
 
 # 대화 저장
 def save_conversation_as_txt(chat_history):
