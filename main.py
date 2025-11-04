@@ -195,7 +195,7 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
 
     retriever = vectorstore.as_retriever()  # 버전 호환 위해 기본값 사용
 
-    # 2) 검색 → 문서 리스트 반환 (LCEL: retriever.invoke 사용)
+    # 2) 검색(LCEL retriever.invoke)
     def retrieve_docs(inputs):
         standalone_q = inputs["standalone_question"]
         return retriever.invoke(standalone_q)
@@ -217,25 +217,37 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
         return "\n\n".join([getattr(d, "page_content", "") for d in docs]) if docs else "(no context)"
 
     chain = (
+        # 입력 정규화
         RunnableMap({
             "input": lambda x: x["input"],
             "chat_history": lambda x: x["chat_history"],
         })
+        # 질문 재작성
         | RunnableMap({
             "input": lambda x: x["input"],
             "chat_history": lambda x: x["chat_history"],
             "standalone_question": question_gen,
         })
+        # ── 단계 1: 문서 검색 결과 생성
         | RunnableMap({
             "input": lambda x: x["input"],
             "chat_history": lambda x: x["chat_history"],
+            "standalone_question": lambda x: x["standalone_question"],
             "context_docs": retrieve_docs,  # list[Document]
+        })
+        # ── 단계 2: 앞 단계의 context_docs를 문자열로 변환
+        | RunnableMap({
+            "input": lambda x: x["input"],
+            "chat_history": lambda x: x["chat_history"],
+            "context_docs": lambda x: x["context_docs"],
             "context_str": lambda x: join_docs_as_text(x["context_docs"]),
         })
+        # 답변 생성 + UI용 컨텍스트 유지
         | RunnableMap({
-            "answer": answer_chain,            # string
-            "context": lambda x: x["context_docs"],  # UI용 원본 문서 리스트
+            "answer": answer_chain,                 # string
+            "context": lambda x: x["context_docs"], # list[Document]
         })
+        # 출력 표준화
         | (lambda x: {"answer": x["answer"], "context": x["context"]})
     )
     return chain
