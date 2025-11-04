@@ -8,9 +8,11 @@ from langchain_community.vectorstores import FAISS  # FAISS 벡터 스토어를 
 from langchain_community.callbacks import get_openai_callback  # OpenAI 응답을 받아오는 콜백
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory  # Streamlit에서 채팅 기록 관리
 from langchain_openai import ChatOpenAI  # OpenAI 언어 모델 사용을 위한 모듈
-from langchain.schema.messages import HumanMessage, AIMessage  # 사용자와 AI 메시지를 나타내는 스키마
 
-# ▼▼ 신규: LCEL 기반 체인 구성에 필요한 모듈 ▼▼
+# ✅ 변경된 임포트 (schema → core)
+from langchain_core.messages import HumanMessage, AIMessage  # 사용자와 AI 메시지 스키마
+
+# ▼▼ LCEL 기반 체인 구성 모듈 ▼▼
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.history_aware_retriever import create_history_aware_retriever
 from langchain.chains.combine_documents import create_stuff_documents_chain
