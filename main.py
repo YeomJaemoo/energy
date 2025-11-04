@@ -5,11 +5,9 @@ from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, Un
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.callbacks import get_openai_callback
-from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain_openai import ChatOpenAI
 
-# ✅ 최신 구조: schema → core
+# 최신 구조: schema → core
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
@@ -42,6 +40,10 @@ def main():
     # 사이드바
     with st.sidebar:
         folder_path = Path()
+        # secrets 점검
+        if "OPENAI_API_KEY" not in st.secrets:
+            st.error("secrets에 OPENAI_API_KEY가 없습니다. .streamlit/secrets.toml에 설정해 주세요.")
+            st.stop()
         openai_api_key = st.secrets["OPENAI_API_KEY"]
         model_name = "gpt-4o-mini"
 
@@ -49,11 +51,17 @@ def main():
         process = st.button("Process", key="process_button")
 
         if process:
-            files_text = get_text_from_folder(folder_path)
-            text_chunks = get_text_chunks(files_text)
-            vectorstore = get_vectorstore(text_chunks)
-            st.session_state.conversation = build_lcel_chain(vectorstore, openai_api_key, model_name)
-            st.session_state.processComplete = True
+            try:
+                files_text = get_text_from_folder(folder_path)
+                text_chunks = get_text_chunks(files_text)
+                vectorstore = get_vectorstore(text_chunks)
+                st.session_state.conversation = build_lcel_chain(vectorstore, openai_api_key, model_name)
+                st.session_state.processComplete = True
+                st.success("인덱스가 준비되었습니다. 이제 질문하세요!")
+            except Exception as e:
+                st.exception(e)
+                st.error("인덱스 준비 중 오류가 발생했습니다. 로그를 확인하세요.")
+                st.stop()
 
         # 음성 입력
         audio_value = st.audio_input("음성 메시지를 녹음하여 질문하세요😁.")
@@ -96,19 +104,19 @@ def main():
             chain = st.session_state.conversation
             with st.spinner("생각 중..."):
                 if chain:
-                    # LCEL: input과 chat_history를 넘김
+                    # LCEL: input과 chat_history 전달
                     result = chain.invoke({"input": query, "chat_history": st.session_state.chat_history})
-                    with get_openai_callback() as cb:
-                        response = result.get("answer", "")
-                        source_documents = result.get("context", [])
+                    response = result.get("answer", "")
+                    source_documents = result.get("context", [])
                     # 이력 업데이트
                     st.session_state.chat_history.append(HumanMessage(content=query))
                     st.session_state.chat_history.append(AIMessage(content=response))
                 else:
                     response = "모델이 준비되지 않았습니다. 'Process' 버튼을 눌러 모델을 준비해주세요."
                     source_documents = []
-        except Exception:
-            st.error("질문을 처리하는 중 오류가 발생했습니다. 다시 시도하세요.")
+        except Exception as e:
+            st.exception(e)  # 원인 로그 출력
+            st.error("질문을 처리하는 중 오류가 발생했습니다. 위 로그를 확인하세요.")
             response, source_documents = "", []
 
         st.session_state.messages.insert(1, {"role": "assistant", "content": response})
@@ -133,15 +141,17 @@ def tiktoken_len(text: str) -> int:
 def get_text_from_folder(folder_path: Path):
     doc_list = []
     folder = Path(folder_path)
+    if not folder.exists():
+        return doc_list
     for file in folder.iterdir():
         if file.is_file():
-            if file.suffix == ".pdf":
+            if file.suffix.lower() == ".pdf":
                 loader = PyPDFLoader(str(file))
                 documents = loader.load_and_split()
-            elif file.suffix == ".docx":
+            elif file.suffix.lower() == ".docx":
                 loader = Docx2txtLoader(str(file))
                 documents = loader.load_and_split()
-            elif file.suffix == ".pptx":
+            elif file.suffix.lower() == ".pptx":
                 loader = UnstructuredPowerPointLoader(str(file))
                 documents = loader.load_and_split()
             else:
@@ -156,10 +166,17 @@ def get_text_chunks(text_docs):
         chunk_overlap=100,
         length_function=tiktoken_len
     )
+    if not text_docs:
+        return []
     return splitter.split_documents(text_docs)
 
 # 벡터 스토어
 def get_vectorstore(text_chunks):
+    if not text_chunks:
+        # 문서가 하나도 없을 때도 안전하게 동작하도록 빈 벡터 DB 생성
+        # (FAISS는 빈 입력을 허용하지 않아 최소 더미를 넣어 우회)
+        from langchain.schema import Document as _Doc  # 일부 버전에선 core가 아닐 수 있어 호환용
+        text_chunks = [_Doc(page_content="(no documents indexed)", metadata={"source": "none"})]
     embeddings = HuggingFaceEmbeddings(
         model_name="jhgan/ko-sroberta-multitask",
         model_kwargs={'device': 'cpu'},
@@ -171,7 +188,7 @@ def get_vectorstore(text_chunks):
 def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
     llm = ChatOpenAI(openai_api_key=openai_api_key, model_name=model_name, temperature=0)
 
-    # 1) 히스토리 기반 질문 재작성 프롬프트 → standalone_question 생성
+    # 1) 히스토리 기반 질문 재작성 → standalone_question
     rewrite_prompt = ChatPromptTemplate.from_messages([
         ("system", "Rewrite the user's question into a standalone query for retrieval, considering the chat history."),
         MessagesPlaceholder("chat_history"),
@@ -181,25 +198,27 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
 
     retriever = vectorstore.as_retriever(search_type="mmr")
 
-    # 2) 검색 컨텍스트 생성 파이프라인: standalone_question → retriever
+    # 2) 검색 → 문서 리스트 반환
     def retrieve_docs(inputs):
         standalone_q = inputs["standalone_question"]
         return retriever.get_relevant_documents(standalone_q)
 
-    # 3) 답변 프롬프트 (문맥 + 히스토리 반영)
+    # 3) 답변 프롬프트 (문맥은 문자열로!)
     answer_prompt = ChatPromptTemplate.from_messages([
         ("system",
          "Answer the user's question using ONLY the provided context. "
-         "If the context is insufficient, say you don't know.\n\nContext:\n{context}"),
+         "If the context is insufficient, say you don't know.\n\nContext:\n{context_str}"),
         MessagesPlaceholder("chat_history"),
         ("human", "{input}")
     ])
-    answer_chain = answer_prompt | llm
+    answer_chain = answer_prompt | llm | StrOutputParser()
 
-    # 4) 전체 LCEL 체인 조립
-    # inputs: {"input", "chat_history"}
-    # adds:   "standalone_question" → docs("context")
+    # 4) 전체 체인 조립
     from langchain_core.runnables import RunnableMap
+
+    def join_docs_as_text(docs):
+        # 프롬프트에 넣을 문자열 컨텍스트
+        return "\n\n".join([getattr(d, "page_content", "") for d in docs]) if docs else "(no context)"
 
     chain = (
         RunnableMap({
@@ -214,17 +233,21 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
         | RunnableMap({
             "input": lambda x: x["input"],
             "chat_history": lambda x: x["chat_history"],
-            "context": retrieve_docs,  # returns list[Document]
+            "context_docs": retrieve_docs,                 # list[Document] (UI용 보존)
+            "context_str": lambda x: join_docs_as_text(x["context_docs"]),  # 프롬프트용 문자열
         })
         | RunnableMap({
-            "answer": answer_chain,     # returns AIMessage
-            "context": lambda x: x["context"]
+            "answer": answer_chain,     # string
+            "context": lambda x: x["context_docs"]
         })
-        # 출력 형태 표준화
-        | (lambda x: {"answer": getattr(x["answer"], "content", str(x["answer"])),
-                      "context": x["context"]})
     )
-    return chain
+    # 결과 표준화
+    def finalize(x):
+        return {
+            "answer": x["answer"],
+            "context": x["context"],  # list[Document] 그대로 반환 (UI에서 expander로 표시)
+        }
+    return chain | finalize
 
 # 대화 저장
 def save_conversation_as_txt(chat_history):
