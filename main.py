@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.documents import Document as CoreDocument  # 더미 문서용
 
 import tiktoken
 import base64
@@ -170,9 +171,8 @@ def get_text_chunks(text_docs):
 # 벡터 스토어
 def get_vectorstore(text_chunks):
     if not text_chunks:
-        # 빈 인덱스 방지용 더미 문서
-        from langchain.schema import Document as _Doc
-        text_chunks = [_Doc(page_content="(no documents indexed)", metadata={"source": "none"})]
+        # 빈 인덱스 방지용 더미 문서 (core 문서 타입 사용)
+        text_chunks = [CoreDocument(page_content="(no documents indexed)", metadata={"source": "none"})]
     embeddings = HuggingFaceEmbeddings(
         model_name="jhgan/ko-sroberta-multitask",
         model_kwargs={'device': 'cpu'},
@@ -182,7 +182,8 @@ def get_vectorstore(text_chunks):
 
 # ✅ LCEL 전용 History-Aware RAG (langchain.chains 없이 구성)
 def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
-    llm = ChatOpenAI(openai_api_key=openai_api_key, model_name=model_name, temperature=0)
+    # 최신 langchain_openai는 model 파라미터 사용
+    llm = ChatOpenAI(openai_api_key=openai_api_key, model=model_name, temperature=0)
 
     # 1) 히스토리 기반 질문 재작성 → standalone_question
     rewrite_prompt = ChatPromptTemplate.from_messages([
@@ -192,12 +193,12 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
     ])
     question_gen = rewrite_prompt | llm | StrOutputParser()
 
-    retriever = vectorstore.as_retriever(search_type="mmr")
+    retriever = vectorstore.as_retriever()  # 버전 호환 위해 기본값 사용
 
-    # 2) 검색 → 문서 리스트 반환
+    # 2) 검색 → 문서 리스트 반환 (LCEL: retriever.invoke 사용)
     def retrieve_docs(inputs):
         standalone_q = inputs["standalone_question"]
-        return retriever.get_relevant_documents(standalone_q)
+        return retriever.invoke(standalone_q)
 
     # 3) 답변 프롬프트 (문맥은 문자열로)
     answer_prompt = ChatPromptTemplate.from_messages([
@@ -209,7 +210,7 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
     ])
     answer_chain = answer_prompt | llm | StrOutputParser()
 
-    # 4) 전체 체인 조립 (필드 추출은 lambda로 명시!)
+    # 4) 전체 체인 조립
     from langchain_core.runnables import RunnableMap
 
     def join_docs_as_text(docs):
@@ -228,7 +229,7 @@ def build_lcel_chain(vectorstore, openai_api_key: str, model_name: str):
         | RunnableMap({
             "input": lambda x: x["input"],
             "chat_history": lambda x: x["chat_history"],
-            "context_docs": retrieve_docs,
+            "context_docs": retrieve_docs,  # list[Document]
             "context_str": lambda x: join_docs_as_text(x["context_docs"]),
         })
         | RunnableMap({
